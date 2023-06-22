@@ -96,7 +96,6 @@ async def describe_scenes(scenes: list, setting: str) -> list:
         EXAMPLE: Characters: ['Daisy - a grumpy cow', 'Charlie - a friendly dog'], Scene: "They came across a babbling brook, and Charlie leaped across with ease. Daisy hesitated, unsure of her ability to jump. But with Charlie's encouragement, she took a leap of faith and cleared the brook, landing on the other side with a thud." Answer: "a grumpy cow leaps over a brook, while a friendly dog encourages"
         You should describe it in a way that an artist could easily recreate the scene from your description. For context, when you are describing a part of the story, refer to the entire story {scenes}. Ensure you describe the characters as they would appear, rather than referring to them by name. The following is the scene you are to describe: {scene}"""
         tasks.append(get_scene_description(scene, system_prompt, content_prompt, setting, image_gen_prompt_suffix))
-        # api_call_response = call_api(system_prompt, content_prompt)
     descriptions = await asyncio.gather(*tasks)
     return list(descriptions)
 
@@ -120,8 +119,6 @@ def create_page_component(scene: str, illustration):
 
 
 def send_pages_to_client(pages):
-    client_url = "localhost:5000"
-    requests.post()
     # todo api post call to client
     pass
 
@@ -155,7 +152,7 @@ async def main():
     for s in scene_descriptions:
         print(str(s))
 
-    # # once scene component function works, this can be used.
+    # # todo once scene component function works, this can be used.
     # illustrations = create_illustrations(scene_descriptions)
     # pages = []
     # for i in range(len(scenes)):
