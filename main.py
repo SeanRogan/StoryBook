@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import openai
+import time
 import requests
 import settings
 from midjourney_api import TNL
@@ -12,8 +13,12 @@ openai.api_key = settings.OPENAI_API_KEY
 
 
 def call_midjourney(scene):
-    res = tnl.imagine(prompt=scene)
-    print(str(res))
+    res = ""
+    try:
+        res = tnl.imagine(prompt=scene)
+    except Exception:
+        print("there was an error with the midjourney request" + res.text)
+    return res
 
 
 async def acall_api(system_prompt, content_prompt, n=1, temp=0.5, model='gpt-3.5-turbo-16k'):
@@ -73,7 +78,7 @@ def create_scenes(story: str) -> list:
 
 # asynchronous function calls for scene description
 async def get_scene_description(scene: str, system_prompt: str, content_prompt: str, setting: str, suffix: str):
-    response = await acall_api(system_prompt, content_prompt)
+    response = await acall_api(system_prompt, content_prompt, model="gpt-4")
     description = response["choices"][0]["message"]["content"]
     description = description + setting + suffix
     return description
@@ -95,7 +100,7 @@ async def describe_scenes(scenes: list, setting: str) -> list:
         EXAMPLE: Characters: ['Lily - a young girl with curly red hair' , 'Oliver - a boy with brown hair'] Scene: 'As Lily and Oliver faced each challenge together, their bond grew stronger. They learned to trust their instincts, listen to their hearts, and believe in themselves. Along the way, they discovered the true power of friendship and the magic it holds.' Answer: 'a girl with curly red hair and a boy with brown hair stand side by side, their faces filled with determination and trust. Their hands are clasped tightly together, symbolizing their unbreakable bond. Surrounding them, vibrant colors swirl in the air, representing the magic of friendship and the strength it brings.'
         EXAMPLE: Characters: ['Daisy - a grumpy cow', 'Charlie - a friendly dog'], Scene: "They came across a babbling brook, and Charlie leaped across with ease. Daisy hesitated, unsure of her ability to jump. But with Charlie's encouragement, she took a leap of faith and cleared the brook, landing on the other side with a thud." Answer: "a grumpy cow leaps over a brook, while a friendly dog encourages"
         You should describe it in a way that an artist could easily recreate the scene from your description. For context, when you are describing a part of the story, refer to the entire story {scenes}. Ensure you describe the characters as they would appear, rather than referring to them by name. The following is the scene you are to describe: {scene}"""
-        tasks.append(get_scene_description(scene, system_prompt, content_prompt, setting, image_gen_prompt_suffix))
+        tasks.append(get_scene_description(system_prompt, content_prompt, setting, image_gen_prompt_suffix))
     descriptions = await asyncio.gather(*tasks)
     return list(descriptions)
 
@@ -104,9 +109,9 @@ async def describe_scenes(scenes: list, setting: str) -> list:
 def create_illustrations(scene_descriptions: list) -> list:
     images = []
     for scene in scene_descriptions:
-        images.append("image goes here")
-
-    #       images.append(call_midjourney(scene))
+        image = call_midjourney(scene)
+        images.append(image['messageId'])
+        time.sleep(50)
     return images
 
 
@@ -124,14 +129,13 @@ def send_pages_to_client(pages):
 
 
 async def main():
-    print("Welcome to FableSTREAM!")
+    print("Welcome to StoryBook!")
     # story generation params
     characters = []
     setting = ""
     rating = ""
     storybook_book_gen_system_prompt = """You are a masterful storyteller, skilled in the art of visual storytelling. 
         Your stories are always captivating and whimsical, and emotionally engaging."""
-
     storybook_book_gen_content_prompt = f"""You are tasked with creating an original short story about the following characters and setting. 
         RATING {rating},
         CHARACTERS: {characters},
@@ -149,19 +153,13 @@ async def main():
     story = generate_story(storybook_book_gen_system_prompt, storybook_book_gen_content_prompt)
     scenes = create_scenes(story)
     scene_descriptions = await describe_scenes(scenes, setting)
-    for s in scene_descriptions:
-        print(str(s))
-
-    # # todo once scene component function works, this can be used.
-    # illustrations = create_illustrations(scene_descriptions)
-    # pages = []
-    # for i in range(len(scenes)):
-    #     cur_scene = scenes[i]
-    #     cur_img = illustrations[i]
-    #     pages.append((cur_scene, cur_img))
-    # send_pages_to_client(pages)
-    #
-
+    illustrations = create_illustrations(scene_descriptions)
+    pages = []
+    for i in range(len(scenes)):
+        cur_scene = scenes[i]
+        cur_img = illustrations[i]
+        pages.append((cur_scene, cur_img))
+    print(str(pages))
 
 if __name__ == '__main__':
     asyncio.run(main())
