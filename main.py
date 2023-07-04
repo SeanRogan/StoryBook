@@ -4,21 +4,18 @@ import openai
 import time
 import requests
 import settings
-from midjourney_api import TNL
+import stable_diffusion_api as sd
 
 logging.basicConfig(level=4, filename='logs.txt')
 # configure apis
-tnl = TNL(settings.TNL_API_KEY)
 openai.api_key = settings.OPENAI_API_KEY
 
 
-def call_midjourney(scene):
-    res = ""
-    try:
-        res = tnl.imagine(prompt=scene)
-    except Exception:
-        print("there was an error with the midjourney request" + res.text)
-    return res
+def call_sd(prompt: str):
+    # call the img2txt api, image is saved to directory and img_id(which is same as filename) is returned
+    # the image can be matched to the file name.
+    img_id = sd.call_txt2img(prompt)
+    return img_id
 
 
 async def acall_api(system_prompt, content_prompt, n=1, temp=0.5, model='gpt-3.5-turbo-16k'):
@@ -68,17 +65,17 @@ def generate_story(system_prompt: str, content_prompt: str) -> str:
 
 # story gen output broken into chapters, chapters broken into visual scenes.
 def create_scenes(story: str) -> list:
-    chapters = []
-    split_story: list = story.split("\n")
-    for c in split_story:
-        if c.find('Chapter') == -1:
-            chapters.append(c)
-    return list(filter(None, chapters))
+    split_story: list = story.split("\n\n")
+    chapters = [c for c in split_story if 'chapter' not in c.lower()]
+    # for c in split_story:
+    #     if 'Chapter' not in c or 'CHAPTER' not in c:
+    #         chapters.append(c)
+    return chapters
 
 
 # asynchronous function calls for scene description
-async def get_scene_description(scene: str, system_prompt: str, content_prompt: str, setting: str, suffix: str):
-    response = await acall_api(system_prompt, content_prompt, model="gpt-4")
+async def get_scene_description(system_prompt: str, content_prompt: str, setting: str, suffix: str):
+    response = await acall_api(system_prompt, content_prompt)
     description = response["choices"][0]["message"]["content"]
     description = description + setting + suffix
     return description
@@ -89,7 +86,7 @@ async def describe_scenes(scenes: list, setting: str) -> list:
     system_prompt = """You are a world famous illustrator of children's books and illustrated novels.
      You have mastered the art of describing the elements of a story as visually captivating scenery."""
     # this should allow for a semi consistent style to be called across images
-    image_gen_prompt_suffix = " whimsical brightly lit stylized animation fantasy cartoon kids books ultra high detail"
+    image_gen_prompt_suffix = " whimsical, brightly lit, stylized animation, fantasy, cartoon, kids book style"
     tasks = []
     for scene in scenes:
         content_prompt = f"""Using the provided scene of a short story, and a list of the characters in the story, describe the visual aspects of the scene in a few sentences.
@@ -109,9 +106,8 @@ async def describe_scenes(scenes: list, setting: str) -> list:
 def create_illustrations(scene_descriptions: list) -> list:
     images = []
     for scene in scene_descriptions:
-        image = call_midjourney(scene)
-        images.append(image['messageId'])
-        time.sleep(50)
+        image_id = call_sd(scene)
+        images.append(image_id)
     return images
 
 
@@ -128,8 +124,12 @@ def send_pages_to_client(pages):
     pass
 
 
+def print_book(pages):
+    for chapter, img_id in pages:
+        print(f'{chapter}\n\nimage goes here : {img_id} \n\n\n\n\n\n')
+
+
 async def main():
-    print("Welcome to StoryBook!")
     # story generation params
     characters = []
     setting = ""
@@ -144,7 +144,7 @@ async def main():
         an original setting from any time period, and the plot should revolve around overcoming 
         common trials and issues encountered by young people coming of age. all content should be written 
         in a way such that the content would be rated according to the age appropriateness rating that was provided.
-        If no rating is provided, stories should be written in a way that would be considered 'rated PG: appropriate for all ages'.
+        If no rating is provided, stories should be written in a way that would be considered 'rated PG: appropriate for all ages'. DO NOT include the rating in your output. 
 
         Tell the story in a series of small chapters, comprised of visually compelling scenes.
         
@@ -153,13 +153,19 @@ async def main():
     story = generate_story(storybook_book_gen_system_prompt, storybook_book_gen_content_prompt)
     scenes = create_scenes(story)
     scene_descriptions = await describe_scenes(scenes, setting)
+    # todo need to isolate the illustrations message ids
     illustrations = create_illustrations(scene_descriptions)
     pages = []
     for i in range(len(scenes)):
         cur_scene = scenes[i]
         cur_img = illustrations[i]
         pages.append((cur_scene, cur_img))
-    print(str(pages))
+    print_book(pages)
+
+
+def run():
+    asyncio.run(main())
+
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    run()
